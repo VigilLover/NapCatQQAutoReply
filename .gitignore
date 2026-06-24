@@ -9,3 +9,5 @@ deploy/napcat/runtime/
 dist/
 build/
 *.egg-info/
+CLAUDE.md
+.DS_Store

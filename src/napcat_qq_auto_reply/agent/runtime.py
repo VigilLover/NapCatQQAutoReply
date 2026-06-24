@@ -19,6 +19,10 @@ class AgentToolRuntime:
             "agent_tool_context", default=None
         )
 
+    @property
+    def image_generation_enabled(self) -> bool:
+        return self.images is not None
+
     def _current(self) -> RequestToolContext:
         context = self._context.get()
         if context is None:
@@ -60,6 +64,8 @@ class AgentToolRuntime:
         reference_attachment_ids: list[str] | None = None,
         aspect_ratio: str = "1:1",
     ) -> str:
+        if self.images is None:
+            raise RuntimeError("图片生成功能未启用")
         context = self._current()
         requested = reference_attachment_ids or []
         if any(item not in context.allowed_attachment_ids for item in requested):
@@ -74,7 +80,7 @@ class AgentToolRuntime:
     def langchain_tools(self):
         from langchain_core.tools import StructuredTool
 
-        return [
+        tools = [
             StructuredTool.from_function(
                 coroutine=self.search_memory,
                 name="search_qq_memory",
@@ -88,12 +94,16 @@ class AgentToolRuntime:
                     "只有用户明确要求记住或忘记时才能调用。"
                 ),
             ),
-            StructuredTool.from_function(
-                coroutine=self.generate_image,
-                name="generate_image",
-                description=(
-                    "生成或修改图片。参考图只能使用当前提示中列出的 attachment_id。"
-                    "返回成功后，图片会由QQ网关自动作为图片消息发送。"
-                ),
-            ),
         ]
+        if self.image_generation_enabled:
+            tools.append(
+                StructuredTool.from_function(
+                    coroutine=self.generate_image,
+                    name="generate_image",
+                    description=(
+                        "生成或修改图片。参考图只能使用当前提示中列出的 attachment_id。"
+                        "返回成功后，图片会由QQ网关自动作为图片消息发送。"
+                    ),
+                )
+            )
+        return tools

@@ -57,6 +57,14 @@ class AppConfig:
         if not username or not password:
             raise ValueError("NEO4J_DB_AUTH must use username:password")
 
+        image_api_key = str(values.get("IMAGE_GEN_API_KEY") or "").strip()
+        image_api_url = str(values.get("IMAGE_GEN_API_URL") or "").strip()
+        if image_api_key and not image_api_url:
+            raise ValueError(
+                "Missing required configuration: IMAGE_GEN_API_URL "
+                "when IMAGE_GEN_API_KEY is configured"
+            )
+
         return cls(
             napcat_ws_url=_required(values, "NAPCAT_WS_URL"),
             napcat_access_token=_required(values, "NAPCAT_ACCESS_TOKEN"),
@@ -80,9 +88,9 @@ class AppConfig:
             embedding_model=str(values.get("EMBEDDING_MODEL_NAME", "moka-ai/m3e-base")),
             embedding_dims=int(_required(values, "EMBEDDING_DIMS")),
             embedding_cache_folder=str(values.get("EMBEDDING_CACHE_FOLDER") or "") or None,
-            image_api_url=_required(values, "IMAGE_GEN_API_URL"),
-            image_api_key=_required(values, "IMAGE_GEN_API_KEY"),
-            image_model=str(values.get("IMAGE_GEN_MODEL", "gpt-image-2")),
+            image_api_url=image_api_url,
+            image_api_key=image_api_key,
+            image_model=str(values.get("IMAGE_GEN_MODEL") or "gpt-image-2"),
             container_generated_image_dir=(
                 str(values.get("NAPCAT_CONTAINER_GENERATED_IMAGE_DIR") or "").strip()
                 or None

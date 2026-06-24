@@ -19,7 +19,7 @@ QQ群 ↔ NapCat（Docker）↔ OneBot WebSocket 127.0.0.1:3001
 - 每群保留最近 20 条消息和 8 轮对话；短期上下文在 bot 重启后清空。
 - 从 Neo4j `sentence_embeddings` 索引只读检索人格语料。
 - QQ 长期记忆保存在独立 Postgres，用户只能管理自己的记忆。
-- 支持联网搜索、MCP 工具、图片生成和参考图编辑。
+- 支持联网搜索、MCP 工具，以及可选的图片生成和参考图编辑。
 - 支持 `【帮助】`、`【清除历史】`、`【投掷】ndm`、`【rua】`。
 
 ## 部署前准备
@@ -30,7 +30,7 @@ QQ群 ↔ NapCat（Docker）↔ OneBot WebSocket 127.0.0.1:3001
 - Python 3.12+ 和 [uv](https://docs.astral.sh/uv/)。
 - 已建立 `sentence_embeddings` 索引和 `Sentence` 人格语料的 Neo4j。
 - 支持 pgvector 的独立 PostgreSQL 数据库。
-- 可用的 DeepSeek 和图片生成 API。
+- 可用的 DeepSeek API；图片生成 API 可选。
 - 可选的 MCP SSE 服务。
 
 Docker Desktop 必须允许共享项目所在的 `/Users` 目录。开始前请停止原生 NapCat，
@@ -74,7 +74,7 @@ Bot 与外部服务配置：
 | `NEO4J_DB_URL` / `NEO4J_DB_AUTH` | Neo4j 地址及 `用户名:密码` |
 | `EMBEDDING_MODEL_NAME` / `EMBEDDING_DIMS` | 必须与 Neo4j 现有向量数据一致 |
 | `QQ_POSTGRES_DB_URI` | QQ bot 专用 Postgres 数据库连接 |
-| `IMAGE_GEN_API_URL` / `IMAGE_GEN_API_KEY` | 图片生成 API 地址和密钥 |
+| `IMAGE_GEN_API_URL` / `IMAGE_GEN_API_KEY` | 可选；两者留空时不注册生图和参考图编辑工具 |
 | `MCP_SERVER_URL` | 可选 MCP SSE 地址；不使用时留空 |
 
 因为 Python bot 运行在宿主机，宿主机上的 Neo4j、Postgres 和 MCP 通常继续使用

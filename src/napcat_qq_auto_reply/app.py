@@ -50,14 +50,18 @@ async def run_bot(config: AppConfig) -> None:
     removed = attachment_store.cleanup(86400)
     if removed:
         logging.info("Removed %d expired inbound image(s)", removed)
-    image_generator = OpenAIImageGenerator(
-        config.image_api_url,
-        config.image_api_key,
-        config.image_model,
-    )
-    images = ImageGenerationService(
-        config.data_dir / "generated_images", attachment_store, image_generator
-    )
+    images = None
+    if config.image_api_key:
+        image_generator = OpenAIImageGenerator(
+            config.image_api_url,
+            config.image_api_key,
+            config.image_model,
+        )
+        images = ImageGenerationService(
+            config.data_dir / "generated_images", attachment_store, image_generator
+        )
+    else:
+        logging.info("Image generation is disabled because IMAGE_GEN_API_KEY is empty")
     tool_runtime = AgentToolRuntime(memory, images)
     external_tools = await load_external_tools(config.mcp_server_url)
     agent = QQChatAgent(

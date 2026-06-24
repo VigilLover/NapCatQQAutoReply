@@ -43,6 +43,25 @@ def test_container_image_directory_is_optional():
     assert AppConfig.from_mapping(values).container_generated_image_dir is None
 
 
+def test_image_generation_is_optional_when_api_key_is_blank():
+    values = complete_config()
+    values["IMAGE_GEN_API_KEY"] = ""
+    values["IMAGE_GEN_API_URL"] = ""
+
+    config = AppConfig.from_mapping(values)
+
+    assert config.image_api_key == ""
+    assert config.image_api_url == ""
+
+
+def test_image_generation_requires_url_when_api_key_is_configured():
+    values = complete_config()
+    values["IMAGE_GEN_API_URL"] = ""
+
+    with pytest.raises(ValueError, match="IMAGE_GEN_API_URL"):
+        AppConfig.from_mapping(values)
+
+
 def test_config_rejects_missing_required_value():
     values = complete_config()
     values.pop("QQ_POSTGRES_DB_URI")
@@ -63,6 +82,11 @@ def test_prompt_is_qq_specific_and_formats_recent_messages():
     assert "群名片(3): 晚安" in context
 
 
+def test_prompt_omits_image_instructions_when_image_generation_is_disabled():
+    prompt = build_system_prompt("wolf_lumine", image_generation_enabled=False)
+    assert "generate_image" not in prompt
+
+
 class FakeMemory:
     async def search(self, qq_id, query=None, limit=5):
         return f"memory:{qq_id}:{query}"
@@ -75,6 +99,14 @@ class FakeMemory:
 class FakeImages:
     async def generate(self, prompt, reference_ids=None, aspect_ratio="1:1"):
         return LocalImage(Path("/tmp/generated.jpg"), "image/jpeg")
+
+
+def test_agent_runtime_omits_image_tool_when_disabled():
+    runtime = AgentToolRuntime(FakeMemory(), images=None)
+    assert {tool.name for tool in runtime.langchain_tools()} == {
+        "search_qq_memory",
+        "manage_qq_memory",
+    }
 
 
 @pytest.mark.asyncio

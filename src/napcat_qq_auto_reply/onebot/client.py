@@ -75,6 +75,8 @@ class OneBotClient:
         self._session = None
         self._ws = None
         self._pending: dict[str, asyncio.Future] = {}
+        self._reader_task: asyncio.Task | None = None
+        self._event_queue: asyncio.Queue = asyncio.Queue()
 
     async def connect(self) -> None:
         import aiohttp
@@ -88,6 +90,43 @@ class OneBotClient:
             heartbeat=30,
             receive_timeout=None,
         )
+        self._event_queue = asyncio.Queue()
+        self._reader_task = asyncio.create_task(self._read_inbound())
+
+    async def _read_inbound(self) -> None:
+        """Background reader: resolves pending futures for echo responses,
+        and queues events for listen() to consume."""
+        import aiohttp
+
+        try:
+            async for message in self._ws:
+                if message.type == aiohttp.WSMsgType.TEXT:
+                    try:
+                        payload = message.json()
+                    except Exception:
+                        logging.warning("Ignoring invalid OneBot JSON payload")
+                        continue
+                    if not isinstance(payload, dict):
+                        continue
+                    if self.handle_payload(payload):
+                        continue
+                    await self._event_queue.put(payload)
+                elif message.type in {
+                    aiohttp.WSMsgType.CLOSE,
+                    aiohttp.WSMsgType.CLOSED,
+                    aiohttp.WSMsgType.ERROR,
+                }:
+                    break
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logging.exception("OneBot background reader error")
+        finally:
+            error = ConnectionError("OneBot WebSocket disconnected")
+            for future in self._pending.values():
+                if not future.done():
+                    future.set_exception(error)
+            self._pending.clear()
 
     async def call(self, action: str, params: dict[str, Any]) -> Any:
         if self._ws is None:
@@ -122,33 +161,20 @@ class OneBotClient:
     async def listen(
         self, on_event: Callable[[dict[str, Any]], Awaitable[None]]
     ) -> None:
-        import aiohttp
-
-        if self._ws is None:
+        if self._ws is None or self._reader_task is None:
             raise ConnectionError("OneBot WebSocket is not connected")
         try:
-            async for message in self._ws:
-                if message.type == aiohttp.WSMsgType.TEXT:
-                    try:
-                        payload = message.json()
-                    except Exception:
-                        logging.warning("Ignoring invalid OneBot JSON payload")
-                        continue
-                    if not isinstance(payload, dict) or self.handle_payload(payload):
-                        continue
-                    asyncio.create_task(on_event(payload))
-                elif message.type in {
-                    aiohttp.WSMsgType.CLOSE,
-                    aiohttp.WSMsgType.CLOSED,
-                    aiohttp.WSMsgType.ERROR,
-                }:
-                    break
+            while True:
+                payload = await self._event_queue.get()
+                asyncio.create_task(on_event(payload))
+        except asyncio.CancelledError:
+            pass
         finally:
-            error = ConnectionError("OneBot WebSocket disconnected")
-            for future in self._pending.values():
-                if not future.done():
-                    future.set_exception(error)
-            self._pending.clear()
+            self._reader_task.cancel()
+            try:
+                await self._reader_task
+            except asyncio.CancelledError:
+                pass
 
     async def get_login_info(self) -> dict[str, Any]:
         return await self.call("get_login_info", {})
@@ -175,6 +201,13 @@ class OneBotClient:
         )
 
     async def close(self) -> None:
+        if self._reader_task is not None and not self._reader_task.done():
+            self._reader_task.cancel()
+            try:
+                await self._reader_task
+            except asyncio.CancelledError:
+                pass
+        self._reader_task = None
         if self._ws is not None and not getattr(self._ws, "closed", False):
             await self._ws.close()
         self._ws = None

@@ -96,7 +96,10 @@ class QQChatAgent:
     async def _prepare(self, state: ChatState) -> ChatState:
         attachment_ids = sorted(state.get("attachment_ids", set()))
         system_content = (
-            build_system_prompt(self.persona)
+            build_system_prompt(
+                self.persona,
+                image_generation_enabled=self.tool_runtime.image_generation_enabled,
+            )
             + "\n\n【近期群聊】\n"
             + format_recent_context(state["recent_events"])
             + "\n\n【当前用户长期记忆】\n"
