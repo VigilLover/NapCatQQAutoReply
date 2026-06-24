@@ -35,6 +35,7 @@ class AppConfig:
     image_api_url: str
     image_api_key: str
     image_model: str
+    container_generated_image_dir: str | None
     mcp_server_url: str | None
     data_dir: Path
     max_parallel_groups: int
@@ -82,6 +83,10 @@ class AppConfig:
             image_api_url=_required(values, "IMAGE_GEN_API_URL"),
             image_api_key=_required(values, "IMAGE_GEN_API_KEY"),
             image_model=str(values.get("IMAGE_GEN_MODEL", "gpt-image-2")),
+            container_generated_image_dir=(
+                str(values.get("NAPCAT_CONTAINER_GENERATED_IMAGE_DIR") or "").strip()
+                or None
+            ),
             mcp_server_url=str(values.get("MCP_SERVER_URL") or "").strip() or None,
             data_dir=Path(values.get("BOT_DATA_DIR", "data")).expanduser().resolve(),
             max_parallel_groups=int(values.get("MAX_PARALLEL_GROUPS", "4")),

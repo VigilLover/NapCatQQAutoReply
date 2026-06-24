@@ -17,6 +17,7 @@ from napcat_qq_auto_reply.database.memory import (
 from napcat_qq_auto_reply.database.neo4j_style import create_neo4j_style_repository
 from napcat_qq_auto_reply.embeddings import LocalTextEmbeddings
 from napcat_qq_auto_reply.onebot.client import OneBotClient
+from napcat_qq_auto_reply.onebot.path_mapping import ContainerPathMapper
 from napcat_qq_auto_reply.tools.attachments import AttachmentStore, download_http_image
 from napcat_qq_auto_reply.tools.external import load_external_tools
 from napcat_qq_auto_reply.tools.image_generation import ImageGenerationService
@@ -70,7 +71,17 @@ async def run_bot(config: AppConfig) -> None:
     context = ContextStore(recent_limit=20, history_turn_limit=8)
     commands = CommandHandler(context, config.data_dir)
     router = MessageRouter(set(config.allowed_groups), set(config.trigger_words))
-    client = OneBotClient(config.napcat_ws_url, config.napcat_access_token)
+    path_mapper = None
+    if config.container_generated_image_dir:
+        path_mapper = ContainerPathMapper(
+            config.data_dir / "generated_images",
+            config.container_generated_image_dir,
+        )
+    client = OneBotClient(
+        config.napcat_ws_url,
+        config.napcat_access_token,
+        path_mapper=path_mapper,
+    )
     dispatcher = None
 
     try:

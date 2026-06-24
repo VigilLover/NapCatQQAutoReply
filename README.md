@@ -20,10 +20,10 @@
 ## 环境要求
 
 - Python 3.12+
-- NapCat 已登录 QQ，并启用 OneBot 11 WebSocket 服务
+- Docker Desktop（仅 NapCat 运行在容器中）
 - Neo4j 中已存在 `sentence_embeddings` 向量索引和 `Sentence` 人格语料
 - 独立的 PostgreSQL 数据库，并允许安装/使用 pgvector
-- NapCat 与本程序能访问相同的 `data/generated_images/` 绝对路径
+- Docker Desktop 已允许共享项目所在的 `/Users` 目录
 
 ## 安装
 
@@ -31,36 +31,80 @@
 
 ```bash
 uv sync --extra dev
-cp .env.example .env
 ```
 
 编辑 `.env`：
 
 - `NAPCAT_WS_URL` 指向 NapCat WebSocket 服务。
-- NapCat 的 Access Token 与 `NAPCAT_ACCESS_TOKEN` 保持一致。
+- `NAPCAT_ACCESS_TOKEN` 与自动生成的 OneBot 配置保持一致。
 - `QQ_GROUP_ALLOWLIST` 使用逗号分隔群号。
 - `NEO4J_DB_AUTH` 格式为 `用户名:密码`。
 - `QQ_POSTGRES_DB_URI` 必须指向 QQ bot 专用数据库。
 - `EMBEDDING_MODEL_NAME` 和 `EMBEDDING_DIMS` 必须与现有 Neo4j 数据一致。
 
-启动：
+## NapCat Docker 部署
+
+复制配置并修改两个不同的强 Token、QQ 群白名单及其他服务连接：
+
+```bash
+cp .env.example .env
+```
+
+以下变量用于 NapCat：
+
+- `NAPCAT_ACCESS_TOKEN`：OneBot WebSocket Token。
+- `NAPCAT_WEBUI_TOKEN`：WebUI Token，必须与 OneBot Token 不同。
+- `NAPCAT_ACCOUNT`：可选 QQ 号；留空时通过 WebUI 扫码登录。
+- `NAPCAT_CONTAINER_GENERATED_IMAGE_DIR=/shared/generated_images`：容器内生成图目录。
+
+启动 NapCat：
+
+```bash
+scripts/napcat.sh start
+```
+
+然后打开 <http://127.0.0.1:6099/webui> 完成首次登录。OneBot 端口和 WebUI
+端口仅绑定 `127.0.0.1`，不会暴露给局域网。
+
+常用运维命令：
+
+```bash
+scripts/napcat.sh status
+scripts/napcat.sh logs
+scripts/napcat.sh restart
+scripts/napcat.sh stop
+scripts/napcat.sh update  # 仅此命令主动拉取 latest
+```
+
+启动宿主机 Python bot：
 
 ```bash
 uv run napcat-qq-bot
 ```
 
-## NapCat 消息配置
+`scripts/napcat.sh start/restart/update` 会从 `.env` 原子生成 NapCat OneBot 与
+WebUI 配置。不要设置容器的 `MODE=ws`，否则官方空 Token 模板会覆盖配置。
 
-在 NapCat 中启用 OneBot 11 WebSocket 服务端，建议仅监听 `127.0.0.1`，并设置强
-Access Token。默认示例地址是 `ws://127.0.0.1:3001`。程序作为 WebSocket 客户端
-连接，无需开放额外 HTTP 端口。
+QQ 登录数据保存在 `deploy/napcat/runtime/qq`，NapCat 配置保存在
+`deploy/napcat/runtime/config`；两者均被 Git 忽略。宿主
+`data/generated_images` 会以只读方式挂载到容器 `/shared/generated_images`。
+
+官方镜像与卷目录说明见
+[NapCat-Docker](https://github.com/NapNeko/NapCat-Docker)。该镜像同时支持
+`linux/amd64` 和 `linux/arm64`，Docker Desktop 会自动选择本机架构。
+
+## 迁移与回滚
+
+启动容器前先停止原生 NapCat，避免端口冲突和同一 QQ 重复登录。执行
+`scripts/napcat.sh stop` 不会删除登录数据；如需恢复原生 NapCat，停止容器并将
+`NAPCAT_CONTAINER_GENERATED_IMAGE_DIR` 留空，bot 会恢复发送宿主 `file://` URI。
 
 ## 数据边界
 
 - Neo4j：只执行向量检索，按 `Sentence.userid = BOT_PERSONA` 过滤。
 - Postgres：命名空间为 `qq_mention_memories/qq:<QQ号>`。
 - 入站参考图：保存在 `data/inbound_images/`，启动时清理超过 24 小时的文件。
-- 生成图：保存在 `data/generated_images/`，不会上传到其他社区。
+- 生成图：保存在 `data/generated_images/`，通过只读挂载交给 NapCat，不会上传到其他社区。
 - `【清除历史】` 只清除当前群内存对话，不删除长期记忆。
 
 ## 测试
@@ -68,6 +112,8 @@ Access Token。默认示例地址是 `ws://127.0.0.1:3001`。程序作为 WebSoc
 ```bash
 uv run pytest -q
 uv run ruff check .
+docker compose --env-file .env -f deploy/napcat/compose.yml config --quiet
+bash -n scripts/napcat.sh
 ```
 
 真实环境冒烟顺序：普通文本、引用回复、生图、带参考图编辑、长期记忆、联网搜索、

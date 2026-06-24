@@ -24,6 +24,7 @@ def complete_config():
         "EMBEDDING_DIMS": "768",
         "IMAGE_GEN_API_URL": "https://images.invalid/v1",
         "IMAGE_GEN_API_KEY": "image-key",
+        "NAPCAT_CONTAINER_GENERATED_IMAGE_DIR": "/shared/generated_images",
     }
 
 
@@ -33,6 +34,13 @@ def test_config_parses_required_values():
     assert config.trigger_words == frozenset({"【小狼】", "小狼bot"})
     assert config.neo4j_auth == ("neo4j", "password")
     assert config.embedding_dims == 768
+    assert config.container_generated_image_dir == "/shared/generated_images"
+
+
+def test_container_image_directory_is_optional():
+    values = complete_config()
+    values.pop("NAPCAT_CONTAINER_GENERATED_IMAGE_DIR")
+    assert AppConfig.from_mapping(values).container_generated_image_dir is None
 
 
 def test_config_rejects_missing_required_value():

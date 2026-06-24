@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import BotResponse, InboundImage
+from .path_mapping import ContainerPathMapper
 
 
 class OneBotActionError(RuntimeError):
@@ -14,7 +15,9 @@ class OneBotActionError(RuntimeError):
 
 
 def build_group_message(
-    response: BotResponse, reply_to_message_id: int
+    response: BotResponse,
+    reply_to_message_id: int,
+    path_mapper: ContainerPathMapper | None = None,
 ) -> list[dict[str, Any]]:
     segments: list[dict[str, Any]] = [
         {"type": "reply", "data": {"id": str(reply_to_message_id)}}
@@ -23,7 +26,8 @@ def build_group_message(
         segments.append({"type": "text", "data": {"text": response.text}})
     for attachment in response.attachments:
         path = Path(attachment.path).expanduser().resolve()
-        segments.append({"type": "image", "data": {"file": path.as_uri()}})
+        file_uri = path_mapper.to_file_uri(path) if path_mapper else path.as_uri()
+        segments.append({"type": "image", "data": {"file": file_uri}})
     return segments
 
 
@@ -57,10 +61,17 @@ def parse_message_content(message: object) -> MessageContent:
 
 
 class OneBotClient:
-    def __init__(self, url: str, access_token: str, action_timeout: float = 30):
+    def __init__(
+        self,
+        url: str,
+        access_token: str,
+        action_timeout: float = 30,
+        path_mapper: ContainerPathMapper | None = None,
+    ):
         self.url = url
         self.access_token = access_token
         self.action_timeout = action_timeout
+        self.path_mapper = path_mapper
         self._session = None
         self._ws = None
         self._pending: dict[str, asyncio.Future] = {}
@@ -159,7 +170,7 @@ class OneBotClient:
             "send_group_msg",
             {
                 "group_id": group_id,
-                "message": build_group_message(response, reply_id),
+                "message": build_group_message(response, reply_id, self.path_mapper),
             },
         )
 

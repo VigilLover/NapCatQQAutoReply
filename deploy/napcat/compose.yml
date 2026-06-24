@@ -1,0 +1,19 @@
+name: napcat-qq-auto-reply
+
+services:
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat
+    restart: unless-stopped
+    network_mode: bridge
+    environment:
+      NAPCAT_UID: "${NAPCAT_UID:-1000}"
+      NAPCAT_GID: "${NAPCAT_GID:-1000}"
+      ACCOUNT: "${NAPCAT_ACCOUNT:-}"
+    ports:
+      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:6099:6099"
+    volumes:
+      - "./runtime/config:/app/napcat/config"
+      - "./runtime/qq:/app/.config/QQ"
+      - "../../data/generated_images:/shared/generated_images:ro"
