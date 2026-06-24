@@ -63,7 +63,6 @@ class TestFormatResults:
         ts1 = 1719200000
         ts2 = 1719200060
         expected_time1 = datetime.fromtimestamp(ts1, tz=LOCAL_TZ).strftime("%m-%d %H:%M")
-        expected_time2 = datetime.fromtimestamp(ts2, tz=LOCAL_TZ).strftime("%m-%d %H:%M")
         msgs = [
             make_msg(1, 100, "小明", "消息A", timestamp=ts1),
             make_msg(2, 200, "小红", "消息B" * 100, card="小红@群", timestamp=ts2),

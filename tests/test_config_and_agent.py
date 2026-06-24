@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from napcat_qq_auto_reply.agent.prompts import build_system_prompt, format_recent_context
+from napcat_qq_auto_reply.agent.prompts import build_chat_prompt_template, format_recent_context
 from napcat_qq_auto_reply.agent.runtime import AgentToolRuntime
 from napcat_qq_auto_reply.config import AppConfig
 from napcat_qq_auto_reply.onebot.models import GroupEvent, LocalImage, QQUser
@@ -69,10 +69,29 @@ def test_config_rejects_missing_required_value():
         AppConfig.from_mapping(values)
 
 
+def _invoke_template(template, **overrides):
+    """用一组默认值渲染模板，便于测试断言。"""
+    defaults = {
+        "group_id": 0,
+        "user_id": 0,
+        "display_name": "测试用户",
+        "recent_msgs": "无近期群消息",
+        "long_term_memory": "无相关长期记忆",
+        "style_context": "无",
+        "attachment_ids": "无",
+        "chat_history": [],
+        "messages": [],
+    }
+    defaults.update(overrides)
+    return template.invoke(defaults).to_messages()[0].content
+
+
 def test_prompt_is_qq_specific_and_formats_recent_messages():
-    prompt = build_system_prompt("wolf_lumine")
-    assert "QQ群" in prompt
-    assert "水源" not in prompt
+    template = build_chat_prompt_template("wolf_lumine")
+    prompt_text = _invoke_template(template)
+    assert "QQ群" in prompt_text
+    assert "水源" not in prompt_text
+    assert "wolf_lumine" in prompt_text
     events = [
         GroupEvent(1, 1, QQUser(2, "昵称", None), "你好"),
         GroupEvent(1, 2, QQUser(3, "另一个人", "群名片"), "晚安"),
@@ -83,8 +102,10 @@ def test_prompt_is_qq_specific_and_formats_recent_messages():
 
 
 def test_prompt_omits_image_instructions_when_image_generation_is_disabled():
-    prompt = build_system_prompt("wolf_lumine", image_generation_enabled=False)
-    assert "generate_image" not in prompt
+    template = build_chat_prompt_template("wolf_lumine", image_generation_enabled=False)
+    prompt_text = _invoke_template(template)
+    assert "图片生成功能未启用" in prompt_text
+    assert "不要调用 generate_image" in prompt_text
 
 
 class FakeMemory:

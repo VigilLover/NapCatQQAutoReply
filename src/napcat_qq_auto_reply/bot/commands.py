@@ -35,7 +35,7 @@ class CommandHandler:
             return f"你投掷了 {count} 个 1 到 {sides} 之间的随机数：" + ", ".join(
                 map(str, values)
             )
-        if "【rua】" in text:
-            user_text = text.split("【rua】", 1)[1].strip()
-            return await self.pet.rua(user_id, display_name, user_text)
+        # if "【rua】" in text:
+        #     user_text = text.split("【rua】", 1)[1].strip()
+        #     return await self.pet.rua(user_id, display_name, user_text)
         return None

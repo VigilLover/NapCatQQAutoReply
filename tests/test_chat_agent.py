@@ -63,7 +63,7 @@ def test_chat_agent_uses_group_context_and_returns_clean_text():
             user=QQUser(123, "当前用户", None),
             prompt="你喜欢什么？",
             recent_events=recent,
-            history=[("前一个问题", "前一个回答")],
+            history=[("某用户", "前一个问题", "前一个回答")],
             quoted_text="被引用的内容",
             attachment_ids={"current-image"},
         )
