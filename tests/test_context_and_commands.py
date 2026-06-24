@@ -23,11 +23,11 @@ def test_context_limits_and_group_isolation():
         store.add_event(make_event(1, index))
     store.add_event(make_event(2, 99))
     for index in range(10):
-        store.add_turn(1, f"q{index}", f"a{index}")
+        store.add_turn(1, f"q{index}", f"a{index}", f"u{index}")
 
     assert [item.text for item in store.recent(1)] == [f"m{i}" for i in range(5, 25)]
     assert [item.text for item in store.recent(2)] == ["m99"]
-    assert store.history(1)[0] == ("q2", "a2")
+    assert store.history(1)[0] == ("u2", "q2", "a2")
     store.clear_history(1)
     assert store.history(1) == []
     assert len(store.recent(1)) == 20
@@ -36,7 +36,7 @@ def test_context_limits_and_group_isolation():
 @pytest.mark.asyncio
 async def test_clear_and_roll_commands(tmp_path: Path):
     store = ContextStore()
-    store.add_turn(1, "q", "a")
+    store.add_turn(1, "q", "a", "u")
     commands = CommandHandler(store=store, data_dir=tmp_path)
 
     assert (await commands.handle("【清除历史】", group_id=1, user_id=2, display_name="u")) == "已清除当前群的对话历史。"

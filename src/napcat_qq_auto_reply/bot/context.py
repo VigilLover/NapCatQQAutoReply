@@ -10,7 +10,7 @@ class ContextStore:
         self._recent: dict[int, deque[GroupEvent]] = defaultdict(
             lambda: deque(maxlen=self.recent_limit)
         )
-        self._history: dict[int, deque[tuple[str, str]]] = defaultdict(
+        self._history: dict[int, deque[tuple[str, str, str]]] = defaultdict(
             lambda: deque(maxlen=self.history_turn_limit)
         )
 
@@ -22,10 +22,13 @@ class ContextStore:
     def recent(self, group_id: int) -> list[GroupEvent]:
         return list(self._recent[group_id])
 
-    def add_turn(self, group_id: int, prompt: str, response: str) -> None:
-        self._history[group_id].append((prompt, response))
+    def add_turn(
+        self, group_id: int, prompt: str, response: str,
+        user_display_name: str,
+    ) -> None:
+        self._history[group_id].append((user_display_name, prompt, response))
 
-    def history(self, group_id: int) -> list[tuple[str, str]]:
+    def history(self, group_id: int) -> list[tuple[str, str, str]]:
         return list(self._history[group_id])
 
     def clear_history(self, group_id: int) -> None:

@@ -75,4 +75,4 @@ async def test_dispatcher_keeps_normal_context_and_replies_to_trigger(tmp_path: 
     assert agent.kwargs["quoted_text"].startswith("引用-1")
     assert "attachment_id" in agent.kwargs["quoted_text"]
     assert len(agent.kwargs["attachment_ids"]) == 1
-    assert context.history(100) == [("问候", "agent reply")]
+    assert context.history(100) == [("用户", "问候", "agent reply")]

@@ -110,7 +110,10 @@ class BotDispatcher:
                         quoted_text=quoted_text,
                         attachment_ids=attachment_ids,
                     )
-                    self.context.add_turn(event.group_id, routed.prompt, response.text)
+                    self.context.add_turn(
+                        event.group_id, routed.prompt, response.text,
+                        event.user.display_name,
+                    )
                 await self.client.send_group_response(
                     event.group_id, event.message_id, response
                 )
