@@ -52,12 +52,15 @@ class QQChatAgent:
         memory,
         tool_runtime,
         external_tools: list,
+        message_search_tool=None,
     ):
         self.persona = persona
         self.style_repository = style_repository
         self.memory = memory
         self.tool_runtime = tool_runtime
         self.tools = tool_runtime.langchain_tools() + list(external_tools)
+        if message_search_tool is not None:
+            self.tools.append(message_search_tool)
         self.llm = llm.bind_tools(self.tools)
         self.prompt = build_chat_prompt_template(
             persona,

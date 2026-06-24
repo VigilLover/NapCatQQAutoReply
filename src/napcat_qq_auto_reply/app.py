@@ -21,6 +21,7 @@ from napcat_qq_auto_reply.onebot.path_mapping import ContainerPathMapper
 from napcat_qq_auto_reply.tools.attachments import AttachmentStore, download_http_image
 from napcat_qq_auto_reply.tools.external import load_external_tools
 from napcat_qq_auto_reply.tools.image_generation import ImageGenerationService
+from napcat_qq_auto_reply.tools.message_search import create_message_search_tool
 from napcat_qq_auto_reply.tools.openai_images import OpenAIImageGenerator
 
 
@@ -64,14 +65,6 @@ async def run_bot(config: AppConfig) -> None:
         logging.info("Image generation is disabled because IMAGE_GEN_API_KEY is empty")
     tool_runtime = AgentToolRuntime(memory, images)
     external_tools = await load_external_tools(config.mcp_server_url)
-    agent = QQChatAgent(
-        llm=build_deepseek_llm(config),
-        persona=config.persona,
-        style_repository=style_repository,
-        memory=memory,
-        tool_runtime=tool_runtime,
-        external_tools=external_tools,
-    )
     context = ContextStore(recent_limit=20, history_turn_limit=8)
     commands = CommandHandler(context, config.data_dir)
     router = MessageRouter(set(config.allowed_groups), set(config.trigger_words))
@@ -85,6 +78,16 @@ async def run_bot(config: AppConfig) -> None:
         config.napcat_ws_url,
         config.napcat_access_token,
         path_mapper=path_mapper,
+    )
+    message_search_tool = create_message_search_tool(client)
+    agent = QQChatAgent(
+        llm=build_deepseek_llm(config),
+        persona=config.persona,
+        style_repository=style_repository,
+        memory=memory,
+        tool_runtime=tool_runtime,
+        external_tools=external_tools,
+        message_search_tool=message_search_tool,
     )
     dispatcher = None
 
