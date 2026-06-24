@@ -5,6 +5,7 @@ import pytest
 
 from napcat_qq_auto_reply.onebot.client import (
     OneBotClient,
+    _parse_history_message,
     build_group_message,
     parse_message_content,
 )
@@ -98,3 +99,73 @@ def test_parse_quoted_message_keeps_image_sources():
     )
     assert content.text == "看这张[图片]"
     assert content.images[0].source == "https://example.invalid/ref.jpg"
+
+
+# ── HistoryMessage & _parse_history_message ─────────────────────────────
+
+
+def test_parse_history_message_complete():
+    raw = {
+        "message_id": 12345,
+        "user_id": 67890,
+        "sender": {"nickname": "小明", "card": "小明@群名片"},
+        "time": 1719200000,
+        "message": [{"type": "text", "data": {"text": "今天天气真好"}}],
+    }
+    msg = _parse_history_message(raw)
+    assert msg.message_id == 12345
+    assert msg.user_id == 67890
+    assert msg.nickname == "小明"
+    assert msg.card == "小明@群名片"
+    assert msg.text == "今天天气真好"
+    assert msg.timestamp == 1719200000
+    assert msg.display_name == "小明@群名片"
+
+
+def test_parse_history_message_minimal_fields():
+    """缺失字段时使用默认值"""
+    raw = {
+        "message_id": 1,
+        "user_id": 2,
+        "sender": {},
+        "time": 0,
+    }
+    msg = _parse_history_message(raw)
+    assert msg.message_id == 1
+    assert msg.user_id == 2
+    assert msg.nickname == ""
+    assert msg.card is None
+    assert msg.text == ""
+    assert msg.timestamp == 0
+    assert msg.display_name == "2"
+
+
+def test_parse_history_message_string_message():
+    """message 字段为纯字符串而非 segments 数组"""
+    raw = {
+        "message_id": 3,
+        "user_id": 4,
+        "sender": {"nickname": "小红"},
+        "time": 1719200100,
+        "message": "纯文本消息",
+    }
+    msg = _parse_history_message(raw)
+    assert msg.text == "纯文本消息"
+
+
+def test_parse_history_message_mixed_segments():
+    """message 包含文本和图片 segments"""
+    raw = {
+        "message_id": 5,
+        "user_id": 6,
+        "sender": {"nickname": "小刚", "card": None},
+        "time": 1719200200,
+        "message": [
+            {"type": "text", "data": {"text": "看这张图"}},
+            {"type": "image", "data": {"url": "http://example.com/pic.jpg"}},
+            {"type": "text", "data": {"text": "好看吗"}},
+        ],
+    }
+    msg = _parse_history_message(raw)
+    assert msg.text == "看这张图[图片]好看吗"
+    assert msg.display_name == "小刚"

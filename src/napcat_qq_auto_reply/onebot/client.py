@@ -14,6 +14,49 @@ class OneBotActionError(RuntimeError):
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class HistoryMessage:
+    """从 get_group_msg_history API 返回的标准化历史消息"""
+    message_id: int
+    user_id: int
+    nickname: str
+    card: str | None
+    text: str
+    timestamp: int  # Unix 秒
+
+    @property
+    def display_name(self) -> str:
+        return self.card or self.nickname or str(self.user_id)
+
+
+def _parse_history_message(raw: dict) -> HistoryMessage:
+    """解析 NapCat get_group_msg_history 返回的单条消息"""
+    sender = raw.get("sender") if isinstance(raw.get("sender"), dict) else {}
+    message_body = raw.get("message")
+    if isinstance(message_body, str):
+        text = message_body
+    elif isinstance(message_body, list):
+        parts: list[str] = []
+        for seg in message_body:
+            if not isinstance(seg, dict):
+                continue
+            if seg.get("type") == "text":
+                parts.append(str((seg.get("data") or {}).get("text", "")))
+            elif seg.get("type") == "image":
+                parts.append("[图片]")
+        text = "".join(parts)
+    else:
+        text = ""
+    return HistoryMessage(
+        message_id=int(raw.get("message_id", 0)),
+        user_id=int(raw.get("user_id", 0)),
+        nickname=str(sender.get("nickname") or ""),
+        card=str(sender.get("card", "") or "") or None,
+        text=text.strip(),
+        timestamp=int(raw.get("time", 0)),
+    )
+
+
 def build_group_message(
     response: BotResponse,
     reply_to_message_id: int,
@@ -127,6 +170,7 @@ class OneBotClient:
                 if not future.done():
                     future.set_exception(error)
             self._pending.clear()
+            await self._event_queue.put(self._WS_DISCONNECTED)
 
     async def call(self, action: str, params: dict[str, Any]) -> Any:
         if self._ws is None:
@@ -158,6 +202,8 @@ class OneBotClient:
             )
         return True
 
+    _WS_DISCONNECTED = object()
+
     async def listen(
         self, on_event: Callable[[dict[str, Any]], Awaitable[None]]
     ) -> None:
@@ -166,9 +212,9 @@ class OneBotClient:
         try:
             while True:
                 payload = await self._event_queue.get()
+                if payload is self._WS_DISCONNECTED:
+                    raise ConnectionError("NapCat WebSocket disconnected")
                 asyncio.create_task(on_event(payload))
-        except asyncio.CancelledError:
-            pass
         finally:
             self._reader_task.cancel()
             try:
@@ -185,6 +231,19 @@ class OneBotClient:
     async def get_message_content(self, message_id: int) -> MessageContent:
         data = await self.call("get_msg", {"message_id": message_id})
         return parse_message_content((data or {}).get("message"))
+
+    async def get_group_msg_history(
+        self, group_id: int, count: int = 100
+    ) -> list[HistoryMessage]:
+        """获取群消息历史，返回标准化的 HistoryMessage 列表"""
+        data = await self.call(
+            "get_group_msg_history",
+            {"group_id": group_id, "count": count},
+        )
+        if not data:
+            return []
+        raw_messages: list[dict] = data if isinstance(data, list) else data.get("messages", data)
+        return [_parse_history_message(raw) for raw in raw_messages]
 
     async def send_group_response(
         self,
