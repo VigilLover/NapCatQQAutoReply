@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pytest
 
+from unittest.mock import AsyncMock
+
 from napcat_qq_auto_reply.onebot.client import (
     OneBotClient,
     _parse_history_message,
@@ -169,3 +171,56 @@ def test_parse_history_message_mixed_segments():
     msg = _parse_history_message(raw)
     assert msg.text == "看这张图[图片]好看吗"
     assert msg.display_name == "小刚"
+
+
+# ── get_group_msg_history ────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_group_msg_history_returns_parsed_messages():
+    """mock call() 返回原始 JSON，验证 get_group_msg_history 解析结果"""
+    client = OneBotClient.__new__(OneBotClient)
+    client.call = AsyncMock(return_value={
+        "messages": [
+            {
+                "message_id": 100,
+                "user_id": 200,
+                "sender": {"nickname": "测试", "card": "测试名片"},
+                "time": 1719200000,
+                "message": [{"type": "text", "data": {"text": "hello"}}],
+            },
+            {
+                "message_id": 101,
+                "user_id": 201,
+                "sender": {"nickname": "用户二"},
+                "time": 1719200060,
+                "message": "纯文本",
+            },
+        ]
+    })
+    result = await client.get_group_msg_history(12345, count=50)
+    assert len(result) == 2
+    assert result[0].message_id == 100
+    assert result[0].display_name == "测试名片"
+    assert result[1].text == "纯文本"
+    client.call.assert_called_once_with(
+        "get_group_msg_history", {"group_id": 12345, "count": 50}
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_group_msg_history_empty_response():
+    """API 返回空 messages 列表"""
+    client = OneBotClient.__new__(OneBotClient)
+    client.call = AsyncMock(return_value={"messages": []})
+    result = await client.get_group_msg_history(12345)
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_group_msg_history_non_dict_data():
+    """API 返回非字典 data（如列表）"""
+    client = OneBotClient.__new__(OneBotClient)
+    client.call = AsyncMock(return_value=[])
+    result = await client.get_group_msg_history(12345)
+    assert result == []

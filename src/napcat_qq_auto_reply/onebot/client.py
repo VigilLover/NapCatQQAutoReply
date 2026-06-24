@@ -235,15 +235,12 @@ class OneBotClient:
     async def get_group_msg_history(
         self, group_id: int, count: int = 100
     ) -> list[HistoryMessage]:
-        """获取群消息历史，返回标准化的 HistoryMessage 列表"""
         data = await self.call(
             "get_group_msg_history",
             {"group_id": group_id, "count": count},
         )
-        if not data:
-            return []
-        raw_messages: list[dict] = data if isinstance(data, list) else data.get("messages", data)
-        return [_parse_history_message(raw) for raw in raw_messages]
+        messages = data.get("messages", []) if isinstance(data, dict) else []
+        return [_parse_history_message(m) for m in messages]
 
     async def send_group_response(
         self,
