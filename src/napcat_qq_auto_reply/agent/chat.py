@@ -11,6 +11,13 @@ from napcat_qq_auto_reply.onebot.models import BotResponse, GroupEvent, QQUser
 from .prompts import build_chat_prompt_template, format_recent_context
 
 
+MAX_TOOL_CALL_ROUNDS = 5
+TOOL_LIMIT_FALLBACK_TEXT = (
+    "抱歉，我这边调用工具时一直没有得到可收尾的结果，先不硬猜。"
+    "你可以稍后再试，或者换个问法。"
+)
+
+
 class ChatState(TypedDict, total=False):
     user: QQUser
     group_id: int
@@ -53,11 +60,13 @@ class QQChatAgent:
         tool_runtime,
         external_tools: list,
         message_search_tool=None,
+        max_tool_call_rounds: int = MAX_TOOL_CALL_ROUNDS,
     ):
         self.persona = persona
         self.style_repository = style_repository
         self.memory = memory
         self.tool_runtime = tool_runtime
+        self.max_tool_call_rounds = max_tool_call_rounds
         self.tools = tool_runtime.langchain_tools() + list(external_tools)
         if message_search_tool is not None:
             self.tools.append(message_search_tool)
@@ -74,14 +83,42 @@ class QQChatAgent:
         workflow.add_node("prepare", self._prepare)
         workflow.add_node("model", self._call_model)
         workflow.add_node("tools", ToolNode(self.tools, handle_tool_errors=True))
+        workflow.add_node("tool_limit", self._tool_limit_response)
         workflow.set_entry_point("retrieve")
         workflow.add_edge("retrieve", "prepare")
         workflow.add_edge("prepare", "model")
         workflow.add_conditional_edges(
-            "model", tools_condition, {"tools": "tools", END: END}
+            "model",
+            self._route_model_output,
+            {"tools": "tools", "tool_limit": "tool_limit", END: END},
         )
         workflow.add_edge("tools", "model")
+        workflow.add_edge("tool_limit", END)
         return workflow.compile()
+
+    def _route_model_output(self, state: ChatState) -> str:
+        route = tools_condition(state)
+        if route == END:
+            return END
+
+        tool_call_rounds = sum(
+            1 for message in state.get("messages", [])
+            if getattr(message, "tool_calls", None)
+        )
+        if tool_call_rounds > self.max_tool_call_rounds:
+            last_message = state.get("messages", [])[-1]
+            tool_names = [
+                str(call.get("name", "unknown"))
+                for call in getattr(last_message, "tool_calls", [])
+                if isinstance(call, dict)
+            ]
+            logging.warning(
+                "Stopping QQ chat agent after %d tool-call rounds; latest tools=%s",
+                tool_call_rounds,
+                ", ".join(tool_names) or "unknown",
+            )
+            return "tool_limit"
+        return route
 
     async def _retrieve(self, state: ChatState) -> ChatState:
         try:
@@ -135,6 +172,9 @@ class QQChatAgent:
 
     async def _call_model(self, state: ChatState) -> ChatState:
         return {"messages": [await self.llm.ainvoke(state["messages"])]}
+
+    async def _tool_limit_response(self, state: ChatState) -> ChatState:
+        return {"messages": [AIMessage(content=TOOL_LIMIT_FALLBACK_TEXT)]}
 
     async def respond(
         self,

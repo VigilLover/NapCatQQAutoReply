@@ -21,6 +21,26 @@ class FakeBoundModel:
         return AIMessage(content="  小狼回复  ")
 
 
+class RepeatingToolCallModel:
+    def __init__(self):
+        self.invocations = 0
+
+    def bind_tools(self, tools):
+        self.bound_tools = tools
+        return self
+
+    async def ainvoke(self, messages):
+        self.invocations += 1
+        return AIMessage(
+            content="",
+            tool_calls=[{
+                "name": "search_qq_memory",
+                "args": {"query": "咖啡", "limit": 5},
+                "id": f"call_{self.invocations}",
+            }],
+        )
+
+
 class FakeStyle:
     async def search(self, persona, query, top_k=8):
         return [type("Match", (), {"text": "语气参考"})()]
@@ -74,5 +94,33 @@ def test_chat_agent_uses_group_context_and_returns_clean_text():
         assert "用户喜欢咖啡" in rendered
         assert "语气参考" in rendered
         assert "current-image" in rendered
+
+    asyncio.run(scenario())
+
+
+def test_chat_agent_returns_fallback_when_tool_calls_do_not_converge():
+    async def scenario():
+        llm = RepeatingToolCallModel()
+        memory = FakeMemory()
+        runtime = AgentToolRuntime(memory, FakeImages())
+        agent = QQChatAgent(
+            llm=llm,
+            persona="wolf_lumine",
+            style_repository=FakeStyle(),
+            memory=memory,
+            tool_runtime=runtime,
+            external_tools=[],
+        )
+
+        response = await agent.respond(
+            group_id=1,
+            user=QQUser(123, "当前用户", None),
+            prompt="查一下我的咖啡记忆",
+            recent_events=[],
+            history=[],
+        )
+
+        assert "工具" in response.text
+        assert llm.invocations > 1
 
     asyncio.run(scenario())

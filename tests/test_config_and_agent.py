@@ -16,7 +16,7 @@ def complete_config():
         "NAPCAT_ACCESS_TOKEN": "secret",
         "QQ_GROUP_ALLOWLIST": "100, 200",
         "BOT_PERSONA": "wolf_lumine",
-        "BOT_TRIGGER_WORDS": "【小狼】,小狼bot",
+        "BOT_TRIGGER_WORDS": "【小狼】",
         "DEEPSEEK_API_KEY": "key",
         "NEO4J_DB_URL": "bolt://127.0.0.1:7687",
         "NEO4J_DB_AUTH": "neo4j:password",
